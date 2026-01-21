@@ -1,0 +1,4 @@
+ewmh==0.1.6
+python-mpv==1.0.8
+python-xlib==0.33
+six==1.17.0
