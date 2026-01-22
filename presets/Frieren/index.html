@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Frieren - Calibrated PNG Rig</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, #4a3b63 0%, #a8a9e5 100%) !important;
+            overflow: hidden;
+            font-family: 'Ubuntu', sans-serif;
+            user-select: none;
+            transform: translateZ(0);
+        }
+
+        /* --- CALIBRATION AREA: YOUR SAVED POSITIONS --- */
+        #back-hair-l { top: 400px; left: 180px; transform: scale(1.4); }
+        #back-hair-r { top: 400px; left: 560px; transform: scale(1.4); }
+        
+        #ear-l { top: 320px; left: 20px; transform: scale(0.5); }
+        #ear-r { top: 320px; left: 380px; transform: scale(0.5); }
+
+        #outfit { top: 740px; left: 220px; transform: scale(1.35); }
+
+        #base-face { top: 400px; left: 150px; transform: scale(0.8); }
+        #front-hair { top: 445px; left: 200px; transform: scale(1.53); }
+        #features { top: 320px; left: 180px; transform: scale(0.63); }
+
+        /* --- CORE STYLES --- */
+        #frieren-rig {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%) scale(1.3);
+            transform-origin: center bottom;
+            width: 1000px;
+            height: 1000px;
+            z-index: 20;
+            pointer-events: none;
+            
+        }
+
+        #snow-canvas {
+            filter: blur(0.0px);
+        }
+
+        .layer {
+            position: absolute;
+            background-size: contain;
+            background-repeat: no-repeat;
+            width: 500px; 
+            height: 500px;
+            will-change: transform;
+        }
+
+        #visualizer {
+            position: absolute;
+            bottom: 50px;
+            width: 100%;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 4px;
+            z-index: 5;
+        }
+        .bar { width: 12px; background: rgba(255, 255, 255, 0.4); border-radius: 6px 6px 0 0; }
+        #snow-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+    </style>
+</head>
+<body>
+
+    <svg style="display: none;">
+      <filter id="grainy">
+       <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3"  stitchTiles="stitch" />
+        <feColorMatrix type="saturate" values="0" />
+       <feComponentTransfer>
+            <feFuncA type="linear" slope="0.15" /> </feComponentTransfer>
+        <feComposite operator="in" in2="SourceGraphic" />
+      </filter>
+    </svg>
+
+    <div id="visualizer"></div>
+    <canvas id="snow-canvas"></canvas>
+
+    <div id="frieren-rig">
+        <div class="layer" id="back-hair-l" style="background-image: url('back_hair_l.png'); z-index: 21;"></div>
+        <div class="layer" id="back-hair-r" style="background-image: url('back_hair_r.png'); z-index: 21;"></div>
+        <div class="layer" id="ear-l" style="background-image: url('ear_l.png'); z-index: 22;"></div>
+        <div class="layer" id="ear-r" style="background-image: url('ear_r.png'); z-index: 22;"></div>
+        <div class="layer" id="base-face" style="background-image: url('base_face.png'); z-index: 23;"></div>
+        <div class="layer" id="outfit" style="background-image: url('outfit.png'); z-index: 24;"></div>
+        <div class="layer" id="front-hair" style="background-image: url('front_hair.png'); z-index: 25;"></div>
+        <div class="layer" id="features" style="background-image: url('features.png'); z-index: 26;"></div>
+    </div>
+
+    <audio id="bg-music" src="music.mp3" loop autoplay></audio>
+
+    <script>
+        // --- ENGINE STATE VARIABLES ---
+        let targetFPS = 60;
+        let lastFrameTime = 0;
+        let isPaused = false;
+
+        const bHairL = document.getElementById('back-hair-l');
+        const bHairR = document.getElementById('back-hair-r');
+        const bEarL = document.getElementById('ear-l');
+        const bEarR = document.getElementById('ear-r');
+        const bOutfit = document.getElementById('outfit');
+        const fFace = document.getElementById('base-face');
+        const fHair = document.getElementById('front-hair');
+        const fFeat = document.getElementById('features');
+        const audio = document.getElementById('bg-music');
+
+        // --- ENGINE API (Called by Python) ---
+
+        window.setFPS = function(fps) {
+            targetFPS = fps;
+        };
+
+        window.setPlaybackPaused = function(paused) {
+            isPaused = paused;
+            // Visually pause the snow/rig
+            document.body.style.opacity = paused ? "0.8" : "1.0"; // Optional visual cue
+        };
+
+        window.setMuted = function(mute) { 
+            if (audio) audio.muted = mute; 
+        };
+
+        window.updateVolume = function(value) {
+            if (audio) audio.volume = value;
+        };
+
+        // --- PARALLAX ENGINE ---
+        window.updateMouse = (x, y) => {
+            // Optimization: Don't calculate parallax if the wallpaper is covered
+            if (isPaused) return;
+
+            const deltaX = (x - window.innerWidth / 2) / (window.innerWidth / 2);
+            const deltaY = (y - window.innerHeight / 2) / (window.innerHeight / 2);
+            
+            const bX = -deltaX * 15; const bY = deltaY * 5;
+            [bHairL, bHairR, bEarL, bEarR].forEach(el => {
+                el.style.marginLeft = `${bX}px`; el.style.marginTop = `${bY}px`;
+            });
+
+            const oX = deltaX * 12; const oY = deltaY * 5;
+            bOutfit.style.marginLeft = `${oX}px`; bOutfit.style.marginTop = `${oY}px`;
+
+            const hX = deltaX * 25; const hY = deltaY * 15;
+            [fFace, fHair].forEach(el => {
+                el.style.marginLeft = `${hX}px`; el.style.marginTop = `${hY}px`;
+            });
+
+            const featX = deltaX * 57; const featY = deltaY * 32;
+            fFeat.style.marginLeft = `${featX}px`; fFeat.style.marginTop = `${featY}px`;
+        }
+
+        // --- SNOW LOGIC ---
+        const canvas = document.getElementById('snow-canvas');
+        const ctx = canvas.getContext('2d');
+        let snowParticles = [];
+
+        function createSnow() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            snowParticles = Array.from({length: 150}, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                r: Math.random() * 2 + 1,
+                vY: Math.random() * 1.5 + 0.5,
+                vX: Math.random() * 1.2 + 0.4
+            }));
+        }
+
+        // --- CORE RENDER LOOP (With FPS & Pause Support) ---
+        function render(currentTime) {
+            requestAnimationFrame(render);
+
+            // 1. Performance Mode check
+            if (isPaused) return;
+
+            // 2. FPS Limiter check
+            const deltaTime = currentTime - lastFrameTime;
+            const interval = 1000 / targetFPS;
+
+            if (deltaTime < interval) return;
+            lastFrameTime = currentTime - (deltaTime % interval);
+
+            // 3. Draw Frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            snowParticles.forEach(p => {
+                p.y += p.vY; p.x += p.vX;
+                if (p.y > canvas.height) p.y = -10;
+                if (p.x > canvas.width) p.x = -10;
+                ctx.moveTo(p.x, p.y);
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+            });
+            ctx.fill();
+        }
+
+        createSnow();
+        requestAnimationFrame(render); // Start the loop via rAF
+    </script>
+</body>
+</html>

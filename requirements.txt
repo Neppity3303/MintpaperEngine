@@ -1,12 +1,25 @@
 # Core MintPaper engine dependencies
-ewmh==0.1.6              # Extended Window Manager Hints for window management
-python-mpv==1.0.8       # MPV player bindings for video playback
-python-xlib==0.33       # X11 protocol Python bindings
-six==1.17.0             # Python 2/3 compatibility library
+ewmh==0.1.6              
+python-mpv==1.0.8       
+python-xlib==0.33       
+six==1.17.0             
 
 # System monitoring and interaction
-psutil>=5.8.0           # Process and system utilities for window detection
-pynput>=1.7.6           # Mouse/keyboard input control
+psutil>=5.8.0           
+pynput>=1.7.6           
 
-# GTK and related GUI libraries (usually system packages, listed for reference)
-# PyGObject>=3.40.0      # Python bindings for GObject/GTK (usually from system package manager)
+# --- ADDITIONS ---
+
+# Networking / Socket Support (Standard Library, but listed for clarity)
+# No pip install needed for 'socket', but ensuring it's not blocked
+
+# JSON Configuration handling
+# No pip install needed for 'json', part of Python standard library
+
+# File system watching for the "Hot-Reload" feature
+# If you plan on having the engine auto-refresh when you edit an HTML file:
+watchdog>=3.0.0
+
+# Optional: Setproctitle for cleaner 'ps' and 'top' output
+# This makes the process show as "MintpaperEngine" instead of "python3 main.py"
+setproctitle>=1.3.3

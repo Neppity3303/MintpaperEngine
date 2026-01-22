@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mintpaper Engine - Frieren Extension (Breeze Sync)</title>
+    <style>
+        /* Stability & Solid 1.0 Alpha Tint Fix */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            
+            /* --- SOLID GRADIENT TINT --- */
+            /* Matches the primary monitor's vertical gradient precisely */
+            background: linear-gradient(to bottom, #4a3b63 0%, #a8a9e5 100%) !important;
+            
+            overflow: hidden;
+            font-family: 'Ubuntu', sans-serif;
+            color: #a0a0ff;
+            user-select: none;
+            
+            /* GPU Rendering Stability for Linux Mint 22.3 */
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+
+        #snow-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .dashboard {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            padding: 15px 25px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(160, 160, 255, 0.2);
+            z-index: 100;
+        }
+        .stat { font-size: 13px; margin: 4px 0; font-family: monospace; }
+        .value { color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="stat">CPU: <span class="value" id="cpu">0.0</span>%</div>
+        <div class="stat">RAM: <span class="value" id="ram">0.0</span>%</div>
+    </div>
+
+    <canvas id="snow-canvas"></canvas>
+
+    <script>
+        // --- ENGINE STATE & TUNING ---
+        let targetFPS = 60;
+        let lastFrameTime = 0;
+        let isPaused = false;
+
+        const cpuEl = document.getElementById('cpu');
+        const ramEl = document.getElementById('ram');
+        const canvas = document.getElementById('snow-canvas');
+        const ctx = canvas.getContext('2d');
+
+        let snowParticles = [];
+
+        // --- MINT-API HANDLERS (Called by Python) ---
+
+        window.setFPS = function(fps) {
+            targetFPS = fps;
+        };
+
+        window.setPlaybackPaused = function(paused) {
+            isPaused = paused;
+            // Optional: Dim the dashboard when paused
+            document.querySelector('.dashboard').style.opacity = paused ? "0.3" : "1.0";
+        };
+
+        window.updateStats = (data) => {
+            // Only update text if we aren't paused to save DOM cycles
+            if (isPaused) return;
+            cpuEl.textContent = data.cpu.toFixed(1);
+            ramEl.textContent = data.ram.toFixed(1);
+        };
+
+        // --- SNOW ENGINE ---
+
+        function createSnow() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            snowParticles = Array.from({ length: 150 }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                r: Math.random() * 2 + 1,
+                vY: Math.random() * 1.5 + 0.5,
+                vX: Math.random() * 1.2 + 0.4,
+                w: Math.random() * 0.02 
+            }));
+        }
+
+        function drawSnow(currentTime) {
+            requestAnimationFrame(drawSnow);
+
+            // 1. Performance Mode check
+            if (isPaused) return;
+
+            // 2. FPS Limiter check
+            const deltaTime = currentTime - lastFrameTime;
+            const interval = 1000 / targetFPS;
+
+            if (deltaTime < interval) return;
+            lastFrameTime = currentTime - (deltaTime % interval);
+
+            // 3. Render Frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+            ctx.beginPath();
+            
+            snowParticles.forEach(p => {
+                ctx.moveTo(p.x, p.y);
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                
+                // Update positions
+                p.y += p.vY;
+                p.x += p.vX + Math.sin(p.y * p.w) * 0.5;
+
+                // Wrap around logic
+                if (p.y > canvas.height) p.y = -10;
+                if (p.x > canvas.width) p.x = -10;
+                if (p.x < -10) p.x = canvas.width;
+            });
+            
+            ctx.fill();
+        }
+
+        // --- INITIALIZATION ---
+        createSnow();
+        requestAnimationFrame(drawSnow);
+
+        // Stubs for engine stability
+        window.updateMouse = (x, y) => {};
+        window.updateVolume = (val) => {};
+        window.setMuted = (muted) => {};
+
+        window.addEventListener('resize', createSnow);
+    </script>
+</body>
+</html>

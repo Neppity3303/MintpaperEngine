@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Wallpapery Interactive Bridge</title>
+    <style>
+        /* Force GPU to render the entire background immediately */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            
+            /* --- THE TINT FIX --- */
+            /* Increased to 0.9 for better consistency on secondary monitors */
+            background-color: rgba(5, 5, 5, 0.9) !important;
+            
+            overflow: hidden;
+            font-family: 'Ubuntu', sans-serif;
+            color: #00ffcc;
+            user-select: none;
+            
+            /* --- RENDERING STABILITY --- */
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            perspective: 1000;
+            will-change: background-color;
+        }
+
+        #follower {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            background-color: rgba(0, 255, 204, 0.4);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: background-color 0.2s, box-shadow 0.2s, transform 0.1s;
+            pointer-events: none; 
+            z-index: 50; 
+            will-change: left, top;
+        }
+
+        #follower.active {
+            background-color: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 60px 30px rgba(0, 255, 204, 0.7);
+            transform: translate(-50%, -50%) scale(1.4);
+        }
+
+        #audio-zone {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 200px;
+            height: 80px;
+            background: rgba(0, 255, 204, 0.1);
+            border: 2px solid #00ffcc;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-weight: bold;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+
+        .dashboard {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            padding: 15px 25px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 255, 204, 0.2);
+            z-index: 100;
+        }
+
+        .stat { font-size: 13px; margin: 4px 0; font-family: monospace; }
+        .value { color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard" id="dash">
+        <div class="stat">CPU: <span class="value" id="cpu">0.0</span>%</div>
+        <div class="stat">RAM: <span class="value" id="ram">0.0</span>%</div>
+    </div>
+
+    <div id="follower"></div>
+    <div id="audio-zone">AUDIO: OFF</div>
+
+    <audio id="bg-music" src="music.mp3" loop preload="auto"></audio>
+
+    <script>
+        const follower = document.getElementById('follower');
+        const audioZone = document.getElementById('audio-zone');
+        const audio = document.getElementById('bg-music');
+        const cpuEl = document.getElementById('cpu');
+        const ramEl = document.getElementById('ram');
+
+        let lastX = 0;
+        let lastY = 0;
+
+        // Mouse Bridge (Called by pynput in main.py)
+        window.updateMouse = (x, y) => {
+            lastX = x; 
+            lastY = y;
+            
+            requestAnimationFrame(() => {
+                follower.style.left = x + 'px';
+                follower.style.top = y + 'px';
+            });
+
+            // Manual Hover Detection for Button
+            const rect = audioZone.getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                audioZone.style.background = "rgba(0, 255, 204, 0.4)";
+            } else {
+                audioZone.style.background = "rgba(0, 255, 204, 0.1)";
+            }
+        };
+
+        // Click Bridge (Called by pynput in main.py)
+        window.updateClick = (isDown) => {
+            if (isDown) {
+                follower.classList.add('active');
+                
+                const rect = audioZone.getBoundingClientRect();
+                if (lastX >= rect.left && lastX <= rect.right && lastY >= rect.top && lastY <= rect.bottom) {
+                    toggleAudio();
+                }
+            } else {
+                follower.classList.remove('active');
+            }
+        };
+
+        function toggleAudio() {
+            if (audio.paused) {
+                audio.play().then(() => {
+                    audioZone.innerHTML = "AUDIO: ON";
+                    audioZone.style.boxShadow = "0 0 15px #00ffcc";
+                }).catch(e => {
+                    console.error("Audio block:", e);
+                    audioZone.innerHTML = "ERR: CLICK AGAIN";
+                });
+            } else {
+                audio.pause();
+                audioZone.innerHTML = "AUDIO: OFF";
+                audioZone.style.boxShadow = "none";
+            }
+        }
+
+        window.updateVolume = function(value){
+            console.log("Setting volume to ", value);
+            
+            const audio = document.querySelector('audio');
+            if (audio) {
+                audio.volume = value;
+            }
+            const video = document.querySelector('video');
+            if (video) {
+                video.volume = value;
+            }
+
+            if (window.myAudioObject) {
+                window.myAudioObject.volume = value;
+            }
+        }
+
+        // Stats Bridge
+        window.updateStats = (data) => {
+            cpuEl.textContent = data.cpu.toFixed(1);
+            ramEl.textContent = data.ram.toFixed(1);
+        };
+
+        follower.style.left = '-100px';
+        follower.style.top = '-100px';
+    </script>
+</body>
+</html>

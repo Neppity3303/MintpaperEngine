@@ -7,6 +7,7 @@ class AudioController:
         # We now track a list of MintpaperEngine instances instead of players
         self.engines = engines if engines is not None else []
         
+        self.pause_threshold = 0.99
         self.area_threshold_percent = 0.001 
         self.last_check_time = 0
         self.check_cooldown = 0.5
@@ -78,16 +79,24 @@ class AudioController:
                         if not self._is_invalid_window(wid):
                             current_coverage[m['id']] = max(current_coverage[m['id']], coverage)
 
-            # --- THE CHANGE: Talk to the Engine, not the Player ---
             for m in self.monitors:
                 mid = m['id']
+                coverage = current_coverage[mid]
+
                 should_mute = current_coverage[mid] > self.area_threshold_percent
+
+                should_pause = coverage > self.pause_threshold
 
                 if should_mute != m['was_muted']:
                     # Find the engine that belongs to this monitor
                     for engine in self.engines:
                         if engine.mon['id'] == mid:
                             engine.set_muted(should_mute) # Call the unified method
+
+                        if engine.mon.get("performance mode", True):
+                            if should_pause != m.get('was_paused'):
+                                engine.set_paused(should_pause)
+                                m['was_paused'] = should_pause
                     
                     m['was_muted'] = should_mute
                     status = "MUTED" if should_mute else "UNMUTED"

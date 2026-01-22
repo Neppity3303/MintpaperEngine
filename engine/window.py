@@ -23,8 +23,9 @@ class MintpaperEngine:
         self.window.set_accept_focus(False)
         self.window.set_skip_taskbar_hint(True)
         
-        self.window.move(mon_data['x'], mon_data['y'])
-        self.window.resize(mon_data['w'], mon_data['h'])
+        geo = mon_data.get('geometry', mon_data) 
+        self.window.move(geo['x'], geo['y'])
+        self.window.resize(geo['w'], geo['h'])
         
         self.container = Gtk.Box()
         self.window.add(self.container)
@@ -75,3 +76,7 @@ class MintpaperEngine:
             val = "true" if should_mute else "false"
             script = f"document.querySelectorAll('audio, video').forEach(el => el.muted = {val});"
             self.webview.run_javascript(script, None, None, None)
+    
+    def set_paused(self, is_paused):
+        state = "true" if is_paused else "false"
+        self.webview.run_javascript(f"if(window.setPlaybackPaused) {{ setPlaybackPaused({state}); }}")
