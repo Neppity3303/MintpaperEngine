@@ -5,7 +5,7 @@ import sys
 def ensure_single_instance():
     lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     try:
-        lock_socket.bind('\mintpaper_engine_lock')
+        lock_socket.bind('\0mintpaper_engine_lock')
         return lock_socket
     except socket.error:
         print("Wallpapery: Mintpaper is already running in the background.")
