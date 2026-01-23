@@ -3,16 +3,14 @@ import time
 from gi.repository import Gdk
 
 class AudioController:
-    def __init__(self, player):
-        self.player = player
+    def __init__(self, engines=None):
+        # We now track a list of MintpaperEngine instances instead of players
+        self.engines = engines if engines is not None else []
         
-        # --- 1. Define Settings First ---
-        self.area_threshold_percent = 0.01 
+        self.area_threshold_percent = 0.001 
         self.last_check_time = 0
         self.check_cooldown = 0.5
-        self.was_muted = None
         
-        # --- 2. Now Detect Monitors ---
         self.monitors = []
         self._detect_monitors()
 
@@ -32,34 +30,22 @@ class AudioController:
                 "w": geometry.width,
                 "h": geometry.height,
                 "area": geometry.width * geometry.height,
-                "is_primary": monitor.is_primary()
+                "is_primary": monitor.is_primary(),
+                "was_muted": None 
             }
             self.monitors.append(mon_data)
-            
-            if mon_data["is_primary"]:
-                self.primary_monitor = mon_data
-
-        self.debug_monitors()
-
-    def debug_monitors(self):
-        """Prints a visual map of detected monitors to the console."""
-        print("\n" + "="*40)
-        print(" WALLPAPERY MONITOR REGISTRY")
-        print("="*40)
-        for m in self.monitors:
-            role = "PRIMARY" if m['is_primary'] else "SECONDARY"
-            print(f"Monitor {m['id']} [{role}]:")
-            print(f"  -> Resolution: {m['w']}x{m['h']}")
-            print(f"  -> Position:   x={m['x']}, y={m['y']}")
-            print(f"  -> Threshold:  {int(m['area'] * self.area_threshold_percent)} pixels (1%)")
-        print("="*40 + "\n")
 
     def _get_monitor_overlap(self, wx, wy, ww, wh, monitor):
-        """Calculates window area specifically within a monitor's bounds."""
+        """Calculates window area with robust boundary checking."""
+        win_right = wx + ww
+        win_bottom = wy + wh
+        mon_right = monitor['x'] + monitor['w']
+        mon_bottom = monitor['y'] + monitor['h']
+
         overlap_x_start = max(wx, monitor['x'])
-        overlap_x_end = min(wx + ww, monitor['x'] + monitor['w'])
+        overlap_x_end = min(win_right, mon_right)
         overlap_y_start = max(wy, monitor['y'])
-        overlap_y_end = min(wy + wh, monitor['y'] + monitor['h'])
+        overlap_y_end = min(win_bottom, mon_bottom)
         
         w = max(0, overlap_x_end - overlap_x_start)
         h = max(0, overlap_y_end - overlap_y_start)
@@ -71,37 +57,46 @@ class AudioController:
             return
         self.last_check_time = current_time
 
+        if not self.engines:
+            return
+
         try:
             output = subprocess.check_output(["wmctrl", "-lG"], encoding="utf-8", stderr=subprocess.DEVNULL)
-            max_primary_coverage = 0
+            window_lines = output.strip().split('\n')
+
+            current_coverage = {m['id']: 0 for m in self.monitors}
             
-            for line in output.strip().split('\n'):
+            for line in window_lines:
                 parts = line.split()
                 if len(parts) < 6: continue
-                
                 wid, wx, wy, ww, wh = parts[0], int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5])
 
-                # Use the primary monitor data we stored during detection
-                area = self._get_monitor_overlap(wx, wy, ww, wh, self.primary_monitor)
-                coverage = area / self.primary_monitor['area']
-                
-                if coverage > self.area_threshold_percent:
-                    if not self._is_invalid_window(wid):
-                        max_primary_coverage = max(max_primary_coverage, coverage)
-            
-            should_mute = max_primary_coverage > self.area_threshold_percent
+                for m in self.monitors:
+                    area = self._get_monitor_overlap(wx, wy, ww, wh, m)
+                    coverage = area / m['area']
+                    if coverage > self.area_threshold_percent:
+                        if not self._is_invalid_window(wid):
+                            current_coverage[m['id']] = max(current_coverage[m['id']], coverage)
 
-            if should_mute != self.was_muted:
-                self.player.mute = should_mute
-                status = "MUTED (Primary Covered)" if should_mute else "UNMUTED (Primary Clear)"
-                print(f"Wallpapery: {status}")
-                self.was_muted = should_mute
+            # --- THE CHANGE: Talk to the Engine, not the Player ---
+            for m in self.monitors:
+                mid = m['id']
+                should_mute = current_coverage[mid] > self.area_threshold_percent
+
+                if should_mute != m['was_muted']:
+                    # Find the engine that belongs to this monitor
+                    for engine in self.engines:
+                        if engine.mon['id'] == mid:
+                            engine.set_muted(should_mute) # Call the unified method
+                    
+                    m['was_muted'] = should_mute
+                    status = "MUTED" if should_mute else "UNMUTED"
+                    print(f"Mintpaper: Monitor {mid} {status}")
                 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Mintpaper: Audio logic error: {e}")
 
     def _is_invalid_window(self, wid):
-        """Muffin Guard & Ghost Buster."""
         try:
             state = subprocess.check_output(["xprop", "-id", wid, "_NET_WM_STATE"], encoding="utf-8", stderr=subprocess.DEVNULL)
             if "_NET_WM_STATE_HIDDEN" in state: return True
@@ -109,12 +104,15 @@ class AudioController:
             if "_NET_WM_WINDOW_TYPE_DESKTOP" in w_type or "_NET_WM_WINDOW_TYPE_DOCK" in w_type: return True
             stats = subprocess.check_output(["xwininfo", "-id", wid, "-stats"], encoding="utf-8", stderr=subprocess.DEVNULL)
             return "IsViewable" not in stats
-        except:
-            return True
+        except: return True
 
     def start(self):
-        try:
-            self.player.volume = 100
-            self.player.mute = False
-        except:
-            pass
+        """Ensure all engines start unmuted."""
+        for m in self.monitors:
+            m['was_muted'] = None
+
+
+        for engine in self.engines:
+            try:
+                engine.set_muted(False)
+            except: pass

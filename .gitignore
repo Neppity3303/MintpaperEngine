@@ -1,4 +1,19 @@
+# --- Environment & Python Internals ---
+# Hides the virtual environment and compiled bytecode
 venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# --- System-Specific Config ---
+# Hides your personal config.json so it doesn't overwrite 
+# someone else's monitor layout or paths
+config.json
+startup_error.log
+
+# --- IDE & OS Junk ---
+.vscode/
+.idea/
 .DS_Store
+*.swp
+startup_error.log

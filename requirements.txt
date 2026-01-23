@@ -1,4 +1,12 @@
-ewmh==0.1.6
-python-mpv==1.0.8
-python-xlib==0.33
-six==1.17.0
+# Core MintPaper engine dependencies
+ewmh==0.1.6              # Extended Window Manager Hints for window management
+python-mpv==1.0.8       # MPV player bindings for video playback
+python-xlib==0.33       # X11 protocol Python bindings
+six==1.17.0             # Python 2/3 compatibility library
+
+# System monitoring and interaction
+psutil>=5.8.0           # Process and system utilities for window detection
+pynput>=1.7.6           # Mouse/keyboard input control
+
+# GTK and related GUI libraries (usually system packages, listed for reference)
+# PyGObject>=3.40.0      # Python bindings for GObject/GTK (usually from system package manager)

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            /* Using a solid background kills the transparency "ghosting" artifacts */
+            background-color: #0f0f0f; 
+            color: white;
+            font-family: 'Ubuntu', 'Segoe UI', sans-serif;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .clock {
+            font-size: 140px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+            letter-spacing: -2px;
+            margin-bottom: 10px;
+        }
+
+        .stats-container {
+            display: flex;
+            gap: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 40px;
+            border-radius: 100px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-item {
+            font-size: 22px;
+            color: #00ffcc;
+            font-family: 'Ubuntu Mono', 'DejaVu Sans Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .value {
+            font-weight: bold;
+            color: white;
+            display: inline-block;
+            /* Fixed width prevents the text from jumping when values change */
+            width: 65px; 
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="clock" id="clock">00:00:00</div>
+    
+    <div class="stats-container">
+        <div class="stat-item">
+            CPU <span class="value" id="cpu">0.0</span>%
+        </div>
+        <div class="stat-item">
+            RAM <span class="value" id="ram">0.0</span>%
+        </div>
+    </div>
+
+    <script>
+        // 1. Clock Logic
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 2. Python System Bridge
+        // Python calls this every 1-2 seconds with live hardware data
+        window.updateStats = function(data) {
+            const cpuVal = data.cpu.toFixed(1);
+            const ramVal = data.ram.toFixed(1);
+
+            const cpuEl = document.getElementById('cpu');
+            const ramEl = document.getElementById('ram');
+
+            // Updating textContent is more efficient than innerHTML
+            if (cpuEl.textContent !== cpuVal) cpuEl.textContent = cpuVal;
+            if (ramEl.textContent !== ramVal) ramEl.textContent = ramVal;
+        };
+    </script>
+</body>
+</html>
