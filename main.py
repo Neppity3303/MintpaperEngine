@@ -72,16 +72,18 @@ class WallpaperyApp:
         GLib.timeout_add(500, self.update_loop)
         GLib.timeout_add(2000, self.update_system_stats)
 
+        self.setup_tray()
+
     def setup_tray(self):
         self.indicator = AppIndicator.Indicator.new(
             "mintpaper-engine",
-            "desktop",
+            "applications-graphics",
             AppIndicator.IndicatorCategory.APPLICATION_STATUS
         )
         self.indicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         menu = Gtk.Menu()
         item_panel = Gtk.MenuItem(label="Control Panel")
-        item_panel.connect("activate", lambda _: self.editor.present())
+        item_panel.connect("activate", lambda _: self.ui.present() if hasattr(self, 'ui') and self.ui else print("Wallpapery: UI not ready yet."))
         menu.append(item_panel)
 
         item_quit = Gtk.MenuItem(label="Quit")
@@ -108,8 +110,9 @@ class WallpaperyApp:
 
     def on_mouse_move(self, x, y):
         for engine in self.engines:
-            # Multi-monitor coordinate check
-            # engine.mon['geometry'] contains the 'x', 'y', 'w', 'h' from display.py
+            if not engine.window.get_realized():
+                continue
+                
             geo = engine.mon['geometry']
             local_x = x - geo['x']
             local_y = y - geo['y']
@@ -134,11 +137,11 @@ class WallpaperyApp:
         }
         json_stats = json.dumps(stats)
         for engine in self.engines:
-            if hasattr(engine, 'webview') and engine.webview is not None:
-                script = f"if (window.updateStats) {{ updateStats({json_stats}); }}"
-                # We use idle_add to ensure thread-safe UI updates
-                GLib.idle_add(engine.webview.run_javascript, script, None, None, None)
-        return True 
+            # FIX: Check if the window is fully realized before running JS
+            if hasattr(engine, 'window') and engine.window.get_realized():
+                if hasattr(engine, 'webview') and engine.webview is not None:
+                    GLib.idle_add(engine.webview.run_javascript, f"if (window.updateStats) {{ updateStats({json_stats}); }}", None, None, None)
+        return True
     
     def save_config(self):
         config_path = os.path.join(BASE_DIR, "config.json")
@@ -164,17 +167,31 @@ class WallpaperyApp:
                 engine.load_video(path)
             
             fps_limit = mon_data.get("fps_limit", 60)
-            GLib.timeout_add(1000, lambda: engine.webview.run_javascript(f"if(window.setFPS) {{ setFPS({fps_limit}); }}"))
+            # Added check for webview existence before running JS
+            GLib.timeout_add(1000, lambda: engine.webview.run_javascript(f"if(window.setFPS) {{ setFPS({fps_limit}); }}") if hasattr(engine, 'webview') else False)
 
-        # Standard wallpaper "keep-below" forcing
-        GLib.timeout_add(200, self.force_lower_engine, engine)
-        GLib.timeout_add(1000, self.force_lower_engine, engine)
+        # 1. Force the window to "Realize" so it gets a GdkWindow handle
+        engine.window.show_all()
+
+        # 2. Schedule the lowering with a safety check
+        # We use a single 500ms delay; the function will now self-retry if the window isn't ready
+        GLib.timeout_add(500, self.force_lower_engine, engine)
+
 
     def force_lower_engine(self, engine):
-        if hasattr(engine, 'window') and engine.window.get_window():
+        """Safely pushes the wallpaper window behind desktop icons."""
+        if not hasattr(engine, 'window') or engine.window is None:
+            return False
+            
+        # Ensure the widget is mapped to the screen and has a valid window handle
+        if engine.window.get_realized() and engine.window.get_window():
+            # Apply wallpaper behaviors
             engine.window.set_keep_below(True)
             engine.window.get_window().lower()
-        return False
+            return False # Successfully lowered, stop the timeout
+            
+        # If not realized yet, return True to let GLib try again in 500ms
+        return True
 
     def reload_engines(self):
         print("Wallpapery: Hot-reloading engines...")
@@ -192,6 +209,9 @@ class WallpaperyApp:
     def update_loop(self):
         try:
             for engine in self.engines:
+                if not engine.window.get_realized():
+                    continue
+
                 vol = engine.mon.get("volume", 50) / 100.0
                 if engine.mon.get("is_muted"):
                     vol = 0
@@ -205,6 +225,11 @@ class WallpaperyApp:
         return True
 
 if __name__ == "__main__":
+    GLib.set_prgname("mintpaper-engine")
+    GLib.set_application_name("Mintpaper Engine")
+
+    Gtk.Window.set_default_icon_name("applications-graphics")
+
     _instance_lock = ensure_single_instance()
     app = WallpaperyApp()
     print("Wallpapery: Active. Press Ctrl+C to exit.")

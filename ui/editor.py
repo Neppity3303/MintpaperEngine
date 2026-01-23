@@ -47,16 +47,28 @@ class MintpaperControlPanel(Gtk.Window):
 
         self.show_all()
 
+        self.connect("delete-event", self.on_hide_window)
+
+    def on_hide_window(self, widget, event):
+        self.hide()
+        return True
+
     def get_map_metrics(self, widget):
         """Calculates scaling for drawing and hit-detection."""
         width = widget.get_allocated_width()
         height = widget.get_allocated_height()
-        monitors = self.app.config['monitors']
+        monitors = self.app.config.get('monitors', [])
 
-        min_x = min(m['geometry']['x'] for m in monitors)
-        max_x = max(m['geometry']['x'] + m['geometry']['w'] for m in monitors)
-        min_y = min(m['geometry']['y'] for m in monitors)
-        max_y = max(m['geometry']['y'] + m['geometry']['h'] for m in monitors)
+        if not monitors:
+            return 0, 0, 1, 0, 0
+        
+        try:
+            min_x = min(m['geometry']['x'] for m in monitors)
+            max_x = max(m['geometry']['x'] + m['geometry']['w'] for m in monitors)
+            min_y = min(m['geometry']['y'] for m in monitors)
+            max_y = max(m['geometry']['y'] + m['geometry']['h'] for m in monitors)
+        except (KeyError, ValueError):
+            return 0, 0, 1, 0, 0
 
         total_w = max_x - min_x
         total_h = max_y - min_y
@@ -123,6 +135,13 @@ class MintpaperControlPanel(Gtk.Window):
         self.show_all()
 
     def on_draw_map(self, widget, cr):
+        if not self.app.engines or len(self.app.engines) == 0:
+            return False
+        
+        if not self.app.engines[0].window.get_realized():
+            GLib.timeout_add(200, widget.queue_draw)
+            return False
+        
         min_x, min_y, scale, off_x, off_y = self.get_map_metrics(widget)
         
         for m in self.app.config['monitors']:
