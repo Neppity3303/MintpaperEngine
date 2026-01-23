@@ -2,6 +2,8 @@
 import socket
 import sys
 
+_instance_lock_socket = None
+
 def ensure_single_instance():
     lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     try:
@@ -11,7 +13,7 @@ def ensure_single_instance():
         print("Wallpapery: Mintpaper is already running in the background.")
         sys.exit(0)
 
-_instance_lock = ensure_single_instance()
+ensure_single_instance()
 
 
 import gi
