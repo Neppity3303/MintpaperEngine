@@ -5,6 +5,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+config.json
+
 # --- System-Specific Config ---
 # Hides your personal config.json so it doesn't overwrite 
 # someone else's monitor layout or paths
