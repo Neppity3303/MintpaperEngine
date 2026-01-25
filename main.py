@@ -174,8 +174,8 @@ class WallpaperyApp:
         engine.window.show_all()
 
         # 2. Schedule the lowering with a safety check
-        # We use a single 500ms delay; the function will now self-retry if the window isn't ready
-        GLib.timeout_add(500, self.force_lower_engine, engine)
+        # We use a single 2000ms delay because 500ms happens before nemo fully initializes
+        GLib.timeout_add(2000, self.force_lower_engine, engine)
 
 
     def force_lower_engine(self, engine):
@@ -188,6 +188,8 @@ class WallpaperyApp:
             # Apply wallpaper behaviors
             engine.window.set_keep_below(True)
             engine.window.get_window().lower()
+
+            #engine.window.get_window().set_type_hint(Gdk.WindowTypeHint.DESKTOP) Turn this on if icons do not appear above wallpaper upon startup
             return False # Successfully lowered, stop the timeout
             
         # If not realized yet, return True to let GLib try again in 500ms

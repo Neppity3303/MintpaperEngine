@@ -6,6 +6,7 @@ class AudioController:
     def __init__(self, engines=None):
         # We now track a list of MintpaperEngine instances instead of players
         self.engines = engines if engines is not None else []
+        self.start_time = time.time()
         
         self.pause_threshold = 0.99
         self.area_threshold_percent = 0.001 
@@ -61,49 +62,67 @@ class AudioController:
         if not self.engines:
             return
 
+        # 1. Targeted Try: External system call for window list
         try:
             output = subprocess.check_output(["wmctrl", "-lG"], encoding="utf-8", stderr=subprocess.DEVNULL)
             window_lines = output.strip().split('\n')
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return
 
-            current_coverage = {m['id']: 0 for m in self.monitors}
-            
-            for line in window_lines:
-                parts = line.split()
-                if len(parts) < 6: continue
-                wid, wx, wy, ww, wh = parts[0], int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5])
+        current_coverage = {m['id']: 0 for m in self.monitors}
+        
+        # 2. Collect engine window IDs to ignore them
+        # This prevents the engine from muting itself because it 'covers' the monitor
+        engine_wids = []
+        for e in self.engines:
+            if hasattr(e, 'window') and e.window.get_window():
+                try:
+                    engine_wids.append(hex(e.window.get_window().get_xid()))
+                except:
+                    continue
 
-                for m in self.monitors:
-                    area = self._get_monitor_overlap(wx, wy, ww, wh, m)
-                    coverage = area / m['area']
-                    if coverage > self.area_threshold_percent:
-                        if not self._is_invalid_window(wid):
-                            current_coverage[m['id']] = max(current_coverage[m['id']], coverage)
+        # 3. Calculate coverage (excluding our own windows)
+        for line in window_lines:
+            parts = line.split()
+            if len(parts) < 6: continue
+            wid, wx, wy, ww, wh = parts[0], int(parts[2]), int(parts[3]), int(parts[4]), int(parts[5])
+
+            if wid in engine_wids:
+                continue
 
             for m in self.monitors:
-                mid = m['id']
-                coverage = current_coverage[mid]
+                area = self._get_monitor_overlap(wx, wy, ww, wh, m)
+                coverage = area / m['area']
+                if coverage > self.area_threshold_percent:
+                    if not self._is_invalid_window(wid):
+                        current_coverage[m['id']] = max(current_coverage[m['id']], coverage)
 
-                should_mute = current_coverage[mid] > self.area_threshold_percent
+        # 4. Apply Audio/Performance logic
+        for m in self.monitors:
+            mid = m['id']
+            coverage = current_coverage[mid]
 
-                should_pause = coverage > self.pause_threshold
+            should_mute = coverage > self.area_threshold_percent
+            should_pause = coverage > self.pause_threshold
 
-                if should_mute != m['was_muted']:
-                    # Find the engine that belongs to this monitor
-                    for engine in self.engines:
-                        if engine.mon['id'] == mid:
-                            engine.set_muted(should_mute) # Call the unified method
+            # STARTUP GATE: Wait 5 seconds after launch before changing audio states.
+            # This prevents interference with Spotify's initial stream registration.
+            if hasattr(self, 'start_time') and (current_time - self.start_time < 5.0):
+                continue
 
-                        if engine.mon.get("performance mode", True):
+            if should_mute != m['was_muted']:
+                for engine in self.engines:
+                    if engine.mon['id'] == mid:
+                        engine.set_muted(should_mute)
+
+                        if engine.mon.get("performance_mode", True):
                             if should_pause != m.get('was_paused'):
                                 engine.set_paused(should_pause)
                                 m['was_paused'] = should_pause
-                    
-                    m['was_muted'] = should_mute
-                    status = "MUTED" if should_mute else "UNMUTED"
-                    print(f"Mintpaper: Monitor {mid} {status}")
                 
-        except Exception as e:
-            print(f"Mintpaper: Audio logic error: {e}")
+                m['was_muted'] = should_mute
+                status = "MUTED" if should_mute else "UNMUTED"
+                print(f"Mintpaper: Monitor {mid} {status}")
 
     def _is_invalid_window(self, wid):
         try:

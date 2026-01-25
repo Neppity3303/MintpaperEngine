@@ -73,9 +73,8 @@ class MintpaperEngine:
         if self.player:
             self.player.mute = should_mute
         elif self.webview:
-            val = "true" if should_mute else "false"
-            script = f"document.querySelectorAll('audio, video').forEach(el => el.muted = {val});"
-            self.webview.run_javascript(script, None, None, None)
+            # This mutes the entire WebKit process at the browser level
+            self.webview.set_is_muted(should_mute)
     
     def set_paused(self, is_paused):
         state = "true" if is_paused else "false"
