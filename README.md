@@ -1,24 +1,87 @@
-🖥 Compatibility
+**Mintpaper Engine**
 
-    Important: This project has been developed and tested exclusively on Linux Mint 22.3 (Zena) using the Cinnamon desktop environment and Nemo file manager. While it may work on other Debian-based systems, your experience may vary regarding window layering and desktop icon transparency.
+A lightweight, interactive wallpaper engine for Linux Mint. Mintpaper Engine allows you to run HTML/JS/CSS presets or videos as your desktop wallpaper with support for multi-monitor setups, system-tray control, and real-time system stat injection.
+Installation and Requirements
+Linux Mint 22.3
 
-🤝 Collaboration & Support
+**If you want to collaborate please contact me on discord @nepputty**
 
-I am actively looking for feedback, bug reports, and collaborators! Whether you are an artist wanting to create presets, a developer interested in the engine's layering logic, or just a user with a cool idea:
+The included setup.sh script is optimized for Linux Mint 22.3. Running the script will automatically detect and install all necessary system headers and Python dependencies.
+Linux Mint 22.2 and Older
 
-    Discord: Add me as a friend at nepputty
+If you are running version 22.2, the automatic installer may not be able to resolve all system-level dependencies. You must manually ensure the following packages are installed via apt before running the setup script:
+Bash
 
-I’d love to see what kind of interactive wallpapers you create or hear about your experience running this on your setup!
-🚀 Quick Start
+sudo apt update
+sudo apt install libayatana-appindicator3-dev gobject-introspection gir1.2-webkit2-4.1 libgirepository1.0-dev
 
-    Download the MintpaperEngine folder.
+**General Setup**
 
-    Terminal: Run chmod +x setup.sh && ./setup.sh.
+Once the system prerequisites are met, clone the repository and run the automated setup:
+Bash
 
-    Menu: Search for "Mintpaper Engine" and enjoy.
+git clone https://github.com/Neppity3303/MintpaperEngine.git
+cd MintpaperEngine
+bash setup.sh
 
-Final Packaging Tip
+**Creating Interactive Presets**
 
-When you're ready to share the .zip, make sure you've deleted the venv/ folder and any startup_error.log files. This keeps the download small and ensures the setup.sh builds a fresh, compatible environment for the person downloading it.
+The engine looks for an index.html file within your folder in the /presets/ directory.
+Input Handling
 
-Would you like me to help you create a presets/ guide to include in the README so people know how to make their own custom HTML wallpapers for your engine?
+The engine injects mouse and click data directly into the JavaScript context. Implement these functions in your window object to make your wallpaper responsive:
+JavaScript
+
+// Monitor-space mouse coordinates
+window.updateMouse = (x, y) => {
+    // Logic for eye-tracking or hover effects
+};
+
+// Mouse button state
+window.updateClick = (isPressed) => {
+    // Logic for click-to-animate or interaction
+};
+
+**Hardware Integration**
+
+Real-time system statistics are pushed to the wallpaper every 2 seconds. This allows for reactive elements based on PC performance.
+JavaScript
+
+window.updateStats = (stats) => {
+    // Available data:
+    // stats.cpu (Percentage)
+    // stats.ram (Percentage)
+    // stats.disk (Percentage)
+};
+
+**Performance Tuning**
+
+Users can set a frame rate limit via the Control Panel. To respect this limit in your code, use the following hook:
+JavaScript
+
+window.setFPS = (limit) => {
+    // Logic to update your animation timing or requestAnimationFrame loop
+};
+
+**Key Features**
+
+    Instance Locking: Uses Linux Abstract Sockets (\0) to prevent multiple engine instances from running simultaneously.
+
+    Non-Persistent UI: The Control Panel is designed to be hidden, not destroyed, allowing it to maintain state and reappear instantly from the tray.
+
+    Auto-Pathing: The setup.sh script generates absolute paths for the launcher, ensuring the engine can be moved between directories without breaking the Mint Menu shortcut.
+
+**Project Structure**
+
+    engine/: Core logic for window management, audio, and display syncing.
+
+    ui/: Gtk code for the Control Panel and system tray indicator.
+
+    presets/: Directory for HTML and Video wallpaper assets.
+
+    launch.sh: The primary entry point that activates the virtual environment and starts the engine.
+
+**Bugs**
+
+The icon issue should be resolved. If errors continue notify me.
+Mintpaper Engine mutes spotify and possibly some other applications. You can fix this by opening the sound app, going to the applications tab and unmuting it
