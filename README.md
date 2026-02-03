@@ -86,5 +86,3 @@ window.setFPS = (limit) => {
 The icon issue should be resolved. If errors continue notify me.
 
 Mintpaper Engine mutes spotify and possibly some other applications. You can fix this by opening the sound app, going to the applications tab and unmuting it
-
-Performance mode doesn't work right now. It might take a while to get it up and running.
