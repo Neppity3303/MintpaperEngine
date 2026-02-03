@@ -8,7 +8,7 @@ class AudioController:
         self.engines = engines if engines is not None else []
         self.start_time = time.time()
         
-        self.pause_threshold = 0.99
+        self.pause_threshold = 0.59
         self.area_threshold_percent = 0.001 
         self.last_check_time = 0
         self.check_cooldown = 0.5
@@ -33,7 +33,8 @@ class AudioController:
                 "h": geometry.height,
                 "area": geometry.width * geometry.height,
                 "is_primary": monitor.is_primary(),
-                "was_muted": None 
+                "was_muted": None,
+                "was_paused": False
             }
             self.monitors.append(mon_data)
 
@@ -115,14 +116,21 @@ class AudioController:
                     if engine.mon['id'] == mid:
                         engine.set_muted(should_mute)
 
-                        if engine.mon.get("performance_mode", True):
-                            if should_pause != m.get('was_paused'):
-                                engine.set_paused(should_pause)
-                                m['was_paused'] = should_pause
-                
                 m['was_muted'] = should_mute
                 status = "MUTED" if should_mute else "UNMUTED"
                 print(f"Mintpaper: Monitor {mid} {status}")
+
+            if should_pause != m.get('was_paused', False):
+                for engine in self.engines:
+                    if engine.mon['id'] == mid:
+                        # We check performance mode here
+                        if engine.mon.get("performance_mode", True):
+                            engine.set_paused(should_pause)
+                
+                m['was_paused'] = should_pause
+                p_status = "PAUSED" if should_pause else "RESUMED"
+                print(f"Mintpaper: Monitor {mid} {p_status}")
+                
 
     def _is_invalid_window(self, wid):
         try:

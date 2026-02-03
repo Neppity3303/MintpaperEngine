@@ -209,9 +209,17 @@ class WallpaperyApp:
         self.audio_ctrl.start()
 
     def update_loop(self):
-        try:
-            for engine in self.engines:
-                if not engine.window.get_realized():
+        # 1. Skip if no engines exist yet
+        if not self.engines:
+            return True
+
+        for engine in self.engines:
+            try:
+                # 2. Add explicit 'None' checks for the webview
+                if not hasattr(engine, 'window') or not engine.window.get_realized():
+                    continue
+                
+                if not hasattr(engine, 'webview') or engine.webview is None:
                     continue
 
                 vol = engine.mon.get("volume", 50) / 100.0
@@ -219,11 +227,18 @@ class WallpaperyApp:
                     vol = 0
 
                 script = f"if(window.updateVolume) {{ updateVolume({vol}); }}"
-                engine.webview.run_javascript(script)
+                GLib.idle_add(engine.webview.run_javascript, script, None, None, None)
+            except Exception as e:
+                # Just skip this specific engine instead of crashing the whole loop
+                continue
 
-            self.audio_ctrl.update()
+        # 3. This MUST run even if the JS calls above fail
+        try:
+            if hasattr(self, 'audio_ctrl'):
+                self.audio_ctrl.update()
         except Exception as e:
-            print(f"Wallpapery: Audio update error: {e}")
+            print(f"Wallpapery: Audio controller logic error: {e}")
+            
         return True
 
 if __name__ == "__main__":

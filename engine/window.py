@@ -76,6 +76,24 @@ class MintpaperEngine:
             # This mutes the entire WebKit process at the browser level
             self.webview.set_is_muted(should_mute)
     
-    def set_paused(self, is_paused):
-        state = "true" if is_paused else "false"
-        self.webview.run_javascript(f"if(window.setPlaybackPaused) {{ setPlaybackPaused({state}); }}")
+    def set_paused(self, should_pause):
+        if self.player:
+            # If using MPV/Video
+            self.player.pause = should_pause
+        elif self.webview:
+            # 1. Hardware Pause: Stop the WebKit process from rendering
+            # This is the 'Nuclear' pause that saves CPU
+            if hasattr(self.webview, 'set_is_paused'):
+                self.webview.set_is_paused(should_pause)
+            
+            # 2. JS Fallback: Also tell the JS to stop any loops/animations
+            val = "true" if should_pause else "false"
+            script = f"""
+                if (window.mintpaper_paused !== {val}) {{
+                    window.mintpaper_paused = {val};
+                    document.querySelectorAll('video').forEach(v => {val} ? v.pause() : v.play());
+                    // Custom event for wallpaper creators to listen to
+                    window.dispatchEvent(new CustomEvent('wallpaperPause', {{ detail: {val} }}));
+                }}
+            """
+            self.webview.run_javascript(script, None, None, None)
