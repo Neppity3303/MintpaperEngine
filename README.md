@@ -90,7 +90,7 @@ window.setFPS = (limit) => {
 * `presets/` : Directory for HTML and Video wallpaper assets.
 * `launch.sh` : The primary entry point that activates the virtual environment and starts the engine.
 
-## Bugs
+## 8. Bugs
 
 The icon issue should be resolved. If errors continue notify me.
 
