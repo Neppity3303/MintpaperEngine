@@ -43,9 +43,9 @@ def get_monitor_data():
             "scale_factor": monitor.get_scale_factor(),
             "is_muted": False,
             "volume": 50,
-            "performance mode": True,
+            "performance_mode": True,
             "fps_limit": 60,
-            "active preset_path": os.path.join("presets", "circle", "circle.html")
+            "active_preset_path": os.path.join("presets", "circle", "circle.html")
         })
     
     return monitors
@@ -88,8 +88,7 @@ def sync_config(config_path="config.json"):
             existing["orientation"] = hardware["orientation"]
             updated_monitors.append(existing)
         else:
-            # New monitor found!
-            hardware["active_preset"] = "default"
+            # New monitor found! get_monitor_data already populated the defaults.
             updated_monitors.append(hardware)
 
     config["monitors"] = updated_monitors
