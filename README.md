@@ -22,7 +22,7 @@ Bash
 
 git clone https://github.com/Neppity3303/MintpaperEngine.git
 cd MintpaperEngine
-bash setup.sh
+bash ./setup.sh
 
 **Creating Interactive Presets**
 
