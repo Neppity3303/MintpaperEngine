@@ -29,12 +29,6 @@ class WebviewPlugin(MintpaperPlugin):
                 'category': 'Audio'
             },
             {
-                'property': 'html_path',
-                'default': '',
-                'control_type': 'FILE_PATH',
-                'label': 'Wallpaper File'
-            },
-            {
                 'property': 'fps_limit',
                 'default': 60,
                 'control_type': 'SLIDER',

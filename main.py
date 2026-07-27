@@ -15,66 +15,7 @@ from engine.display import sync_config
 from engine.tracker import MintpaperTracker
 from plugins.webview import WebviewPlugin
 from plugins.mp4 import Mp4Plugin
-
-class QuickUI(Gtk.Window):
-    """A temporary 0.10.00 UI for the video showcase."""
-    def __init__(self, app_ref):
-        super().__init__(title="Mintpaper Temp UI")
-        self.app_ref = app_ref
-        self.set_default_size(300, 100)
-        self.set_border_width(10)
-
-        self.connect("delete-event", self.on_delete_event)
-        
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        self.add(box)
-        
-        label = Gtk.Label(label="Select HTML or MP4 Preset:")
-        box.pack_start(label, True, True, 0)
-        
-        # Native GTK File picker
-        self.file_chooser = Gtk.FileChooserButton(title="Choose a preset", action=Gtk.FileChooserAction.OPEN)
-        self.file_chooser.connect("file-set", self.on_file_selected)
-        box.pack_start(self.file_chooser, True, True, 0)
-
-        
-
-    def on_delete_event(self, widget, event):
-        self.hide()
-        return True  # Prevents the window from being destroyed
-
-    def on_file_selected(self, widget):
-        file_path = widget.get_filename()
-        if file_path:
-            print(f"UI: Loading new preset: {file_path}")
-            
-            # 1. Update the config dict for the first monitor
-            self.app_ref.config['monitors'][0]['active_preset_path'] = file_path
-            
-            # 2. Save it to disk so it remembers for next time
-            with open("config.json", "w") as f:
-                json.dump(self.app_ref.config, f, indent=4)
-
-            ext = file_path.lower().split('.')[-1]
-
-            if ext == 'mp4':
-                # Load the MP4 plugin for the first monitor
-                settings = {
-                    "video_path": file_path,
-                    "muted": True,
-                    "volume": 50,
-                    "fps_limit": 60
-                }
-                self.app_ref.engines[0].load_plugin(Mp4Plugin, settings)
-            elif ext == 'html':
-                # Load the Webview plugin for the first monitor
-                settings = {
-                    "html_path": file_path,
-                    "muted": True,
-                    "volume": 50,
-                    "fps_limit": 60
-                }
-                self.app_ref.engines[0].load_plugin(WebviewPlugin, settings)
+from ui.editor import MintpaperEditor
 
 
 class MintpaperApp:
@@ -120,8 +61,36 @@ class MintpaperApp:
         GLib.timeout_add_seconds(2, self.broadcast_stats)
         
         # Launch the temporary UI
-        self.ui = QuickUI(self)
+        self.ui = MintpaperEditor(self)
         self.setup_tray()
+
+
+    def load_preset_to_monitor(self, mon_idx, file_path):
+        print(f"Engine: Routing {file_path} to Monitor {mon_idx}")
+
+        self.config['monitors'][mon_idx]['active_preset_path'] = file_path
+
+        with open('config.json', 'w') as f:
+            json.dump(self.config, f, indent=4)
+
+        ext = file_path.lower().split('.')[-1]
+
+        if ext == 'mp4':
+            settings = {
+                "video_path": file_path,
+                "muted": self.config['monitors'][mon_idx].get("is_muted", True),
+                "volume": self.config['monitors'][mon_idx].get("volume", 50),
+                "fps_limit": self.config['monitors'][mon_idx].get("fps_limit", 60)
+            }
+            self.engines[mon_idx].load_plugin(Mp4Plugin, settings)
+        elif ext == 'html':
+            settings = {
+                "html_path": file_path,
+                "muted": self.config['monitors'][mon_idx].get("is_muted", True),
+                "volume": self.config['monitors'][mon_idx].get("volume", 50),
+                "fps_limit": self.config['monitors'][mon_idx].get("fps_limit", 60)
+            }
+            self.engines[mon_idx].load_plugin(WebviewPlugin, settings)
 
     def setup_tray(self):
 

@@ -26,12 +26,6 @@ class Mp4Plugin(MintpaperPlugin):
                 'slider_settings': {'lower': 0, 'upper': 100},
                 'category': 'Audio'
             },
-            {
-                'property': 'video_path',
-                'default': '',
-                'control_type': 'FILE_PATH',
-                'label': 'MP4 File'
-            }
         ]
 
     def __init__(self, engine, settings):

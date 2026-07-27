@@ -1,216 +1,207 @@
 import gi
 gi.require_version('Gtk', '3.0')
-gi.require_version('PangoCairo', '1.0')
-from gi.repository import Gtk, Gdk, Pango, PangoCairo
-import os
-import subprocess
+from gi.repository import Gtk
+from pathlib import Path
 
-class MintpaperControlPanel(Gtk.Window):
-    def __init__(self, app_instance):
-        super().__init__(title="Mintpaper Control Panel")
-        self.app = app_instance
+class MintpaperEditor(Gtk.Window):
+    def __init__(self, app_ref):
+        super().__init__(title="Mintpaper Editor")
+        self.app_ref = app_ref
+        self.set_default_size(450, 450)
         self.set_border_width(15)
-        self.set_default_size(500, 700)
-        self.set_resizable(False)
-
-        # Selected Monitor ID (defaults to Primary)
-        self.selected_mid = next((m['id'] for m in self.app.config['monitors'] if m['isPrimary']), 0)
-
-        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        self.add(main_vbox)
-
-        # --- 1. THE MONITOR MAP ---
-        main_vbox.pack_start(Gtk.Label(label="<b>Monitor Layout</b> (Click to select)", use_markup=True, xalign=0), False, False, 0)
         
-        self.map_area = Gtk.DrawingArea()
-        self.map_area.set_size_request(-1, 200)
-        self.map_area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
-        self.map_area.connect("draw", self.on_draw_map)
-        self.map_area.connect("button-press-event", self.on_map_clicked)
-        main_vbox.pack_start(self.map_area, False, False, 0)
-
-        main_vbox.pack_start(Gtk.Separator(), False, False, 5)
-
-        # --- 2. SETTINGS AREA ---
-        self.settings_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        main_vbox.pack_start(self.settings_vbox, True, True, 0)
+        # Hide instead of destroy when 'X' is clicked
+        self.connect("delete-event", self.on_delete_event)
         
-        self.refresh_settings_ui()
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+        self.add(self.main_box)
+        
+        # --- 1. Monitor Selector ---
+        mon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        mon_label = Gtk.Label(label="Target Monitor:")
+        
+        self.mon_combo = Gtk.ComboBoxText()
+        for i, engine in enumerate(self.app_ref.engines):
+            geo = engine.mon.get('geometry', {})
+            self.mon_combo.append_text(f"Monitor {i} ({geo.get('w', 0)}x{geo.get('h', 0)})")
+            
+        self.mon_combo.set_active(0)
+        self.mon_combo.connect("changed", self.on_monitor_changed)
+        
+        mon_box.pack_start(mon_label, False, False, 0)
+        mon_box.pack_start(self.mon_combo, True, True, 0)
+        self.main_box.pack_start(mon_box, False, False, 0)
+        
+        # --- 2. Preset File Picker ---
+        preset_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        preset_label = Gtk.Label(label="Active Preset:")
+        
+        self.preset_chooser = Gtk.FileChooserButton(title="Choose a preset", action=Gtk.FileChooserAction.OPEN)
+        self.preset_chooser.connect("file-set", self.on_preset_selected)
+        
+        preset_box.pack_start(preset_label, False, False, 0)
+        preset_box.pack_start(self.preset_chooser, True, True, 0)
+        self.main_box.pack_start(preset_box, False, False, 0)
 
-        # --- 3. APPLY BUTTON ---
-        btn_box = Gtk.ButtonBox(orientation=Gtk.Orientation.HORIZONTAL)
-        btn_box.set_layout(Gtk.ButtonBoxStyle.END)
-        apply_btn = Gtk.Button(label="Apply Changes")
-        apply_btn.connect("clicked", self.on_apply)
-        btn_box.add(apply_btn)
-        main_vbox.pack_end(btn_box, False, False, 0)
+        # Visual divider
+        separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        self.main_box.pack_start(separator, False, False, 10)
+        
+        # --- 3. Dynamic Controls Container ---
+        self.scrolled = Gtk.ScrolledWindow()
+        self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.main_box.pack_start(self.scrolled, True, True, 0)
+        
+        self.controls_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+        self.scrolled.add(self.controls_box)
+        
+        self.refresh_ui()
 
-        self.show_all()
-
-        self.connect("delete-event", self.on_hide_window)
-
-    def on_hide_window(self, widget, event):
+    def on_delete_event(self, widget, event):
         self.hide()
         return True
 
-    def get_map_metrics(self, widget):
-        """Calculates scaling for drawing and hit-detection."""
-        width = widget.get_allocated_width()
-        height = widget.get_allocated_height()
-        monitors = self.app.config.get('monitors', [])
+    def get_selected_monitor_index(self):
+        return self.mon_combo.get_active()
 
-        if not monitors:
-            return 0, 0, 1, 0, 0
+    def on_monitor_changed(self, combo):
+        self.refresh_ui()
+
+    def on_preset_selected(self, widget):
+        file_path = widget.get_filename()
+        if not file_path:
+            return
+            
+        mon_idx = self.get_selected_monitor_index()
+        # Route the new file to the currently selected monitor via main.py
+        self.app_ref.load_preset_to_monitor(mon_idx, file_path)
+        self.refresh_ui()
+
+    def refresh_ui(self):
+        mon_idx = self.get_selected_monitor_index()
+        if mon_idx < 0 or mon_idx >= len(self.app_ref.engines):
+            return
+            
+        engine = self.app_ref.engines[mon_idx]
+        plugin = engine.plugin
         
-        try:
-            min_x = min(m['geometry']['x'] for m in monitors)
-            max_x = max(m['geometry']['x'] + m['geometry']['w'] for m in monitors)
-            min_y = min(m['geometry']['y'] for m in monitors)
-            max_y = max(m['geometry']['y'] + m['geometry']['h'] for m in monitors)
-        except (KeyError, ValueError):
-            return 0, 0, 1, 0, 0
+        # Sync the file picker text to match this monitor's current wallpaper
+        current_path = engine.mon.get("active_preset_path", "")
+        if current_path:
+            self.preset_chooser.set_filename(str(Path(current_path).absolute()))
+            
+        # Clear old dynamically generated widgets
+        for child in self.controls_box.get_children():
+            self.controls_box.remove(child)
+            
+        if not plugin:
+            return
 
-        total_w = max_x - min_x
-        total_h = max_y - min_y
-
-        padding = 30
-        scale = min((width - padding*2) / total_w, (height - padding*2) / total_h)
-        off_x = (width - total_w * scale) / 2
-        off_y = (height - total_h * scale) / 2
-
-        return min_x, min_y, scale, off_x, off_y
-
-    def refresh_settings_ui(self):
-        """Rebuilds UI for the selected monitor."""
-        for child in self.settings_vbox.get_children():
-            self.settings_vbox.remove(child)
-
-        mon = next((m for m in self.app.config['monitors'] if m['id'] == self.selected_mid), None)
-        if not mon: return
+        # Fetch the settings blueprint from the active plugin
+        settings_blueprint = plugin.__class__.get_plugin_settings_info()
         
-        title = f"Settings for Monitor {mon['id']}: {mon['name']}"
-        if mon['isPrimary']: title += " ★"
-        self.settings_vbox.pack_start(Gtk.Label(label=f"<b>{title}</b>", use_markup=True, xalign=0), False, False, 0)
+        # Generate the UI based on the blueprint
+        for item in settings_blueprint:
+            control_type = item.get('control_type')
+            
+            if control_type == 'CHECKBOX_AND_SLIDER':
+                box = self.build_checkbox_and_slider(item, plugin)
+                self.controls_box.pack_start(box, False, False, 0)
+                
+            elif control_type == 'SLIDER':
+                box = self.build_slider(item, plugin)
+                self.controls_box.pack_start(box, False, False, 0)
+                
+            elif control_type == 'FILE_PATH':
+                box = self.build_file_picker(item, plugin)
+                self.controls_box.pack_start(box, False, False, 0)
 
-        # --- SOURCE ---
-        hbox = Gtk.Box(spacing=6)
-        self.source_entry = Gtk.Entry()
-        self.source_entry.set_text(mon.get("active_preset_path", ""))
-        browse_btn = Gtk.Button(label="Browse")
-        browse_btn.connect("clicked", self.on_browse)
-        hbox.pack_start(self.source_entry, True, True, 0)
-        hbox.pack_start(browse_btn, False, False, 0)
-        self.settings_vbox.pack_start(hbox, False, False, 0)
+        self.controls_box.show_all()
 
-        # --- AUDIO ---
-        self.settings_vbox.pack_start(Gtk.Label(label="<b>Audio Settings</b>", use_markup=True, xalign=0), False, False, 0)
-        audio_box = Gtk.Box(spacing=10)
-        self.mute_check = Gtk.CheckButton(label="Mute")
-        self.mute_check.set_active(mon.get("is_muted", False))
-        self.mute_check.connect("toggled", self.on_mute_toggled)
+    # --- Dynamic Widget Builders ---
+
+    def build_slider(self, item, plugin):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        label = Gtk.Label(label=item.get('label', 'Setting'))
+        label.set_halign(Gtk.Align.START)
+        box.pack_start(label, False, False, 0)
         
-        self.vol_adj = Gtk.Adjustment(value=mon.get("volume", 50), lower=0, upper=100, step_increment=1)
-        self.vol_scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=self.vol_adj)
-        self.vol_scale.set_digits(0)
-        self.vol_scale.set_sensitive(not self.mute_check.get_active())
+        settings_info = item.get('settings', {})
+        lower = settings_info.get('lower', 0)
+        upper = settings_info.get('upper', 100)
+        prop_name = item.get('property')
         
-        audio_box.pack_start(self.mute_check, False, False, 0)
-        audio_box.pack_start(self.vol_scale, True, True, 0)
-        self.settings_vbox.pack_start(audio_box, False, False, 0)
-
-        # --- PERFORMANCE ---
-        self.settings_vbox.pack_start(Gtk.Label(label="<b>Performance</b>", use_markup=True, xalign=0), False, False, 0)
-        self.perf_check = Gtk.CheckButton(label="Performance Mode (Auto-Pause when covered)")
-        self.perf_check.set_active(mon.get("performance_mode", True))
-        self.settings_vbox.pack_start(self.perf_check, False, False, 0)
-
-        fps_hbox = Gtk.Box(spacing=10)
-        fps_hbox.pack_start(Gtk.Label(label="FPS Limit:"), False, False, 0)
-        self.fps_adj = Gtk.Adjustment(value=mon.get("fps_limit", 60), lower=15, upper=144, step_increment=1)
-        self.fps_scale = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=self.fps_adj)
-        self.fps_scale.set_digits(0)
-        fps_hbox.pack_start(self.fps_scale, True, True, 0)
-        self.settings_vbox.pack_start(fps_hbox, False, False, 0)
-
-        self.show_all()
-
-    def on_draw_map(self, widget, cr):
-        if not self.app.engines or len(self.app.engines) == 0:
-            return False
+        current_val = plugin.settings.get(prop_name, lower)
         
-        if not self.app.engines[0].window.get_realized():
-            GLib.timeout_add(200, widget.queue_draw)
-            return False
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, lower, upper, 1)
+        scale.set_value(current_val)
+        scale.set_draw_value(True)
         
-        min_x, min_y, scale, off_x, off_y = self.get_map_metrics(widget)
+        scale.connect("value-changed", lambda s: self.on_slider_changed(plugin, prop_name, s.get_value()))
+        box.pack_start(scale, False, False, 0)
+        return box
+
+    def build_checkbox_and_slider(self, item, plugin):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         
-        for m in self.app.config['monitors']:
-            geo = m['geometry']
-            x, y = off_x + (geo['x'] - min_x) * scale, off_y + (geo['y'] - min_y) * scale
-            w, h = geo['w'] * scale, geo['h'] * scale
+        props = item.get('property') 
+        defaults = item.get('default') 
+        
+        muted_prop = props[0]
+        vol_prop = props[1]
+        
+        is_muted = plugin.settings.get(muted_prop, defaults[0])
+        volume = plugin.settings.get(vol_prop, defaults[1])
+        
+        # Checkbox for mute
+        cb_settings = item.get('checkbox_settings', {})
+        check = Gtk.CheckButton(label=cb_settings.get('label', 'Mute Audio'))
+        check.set_active(is_muted)
+        check.connect("toggled", lambda c: self.on_mute_toggled(plugin, muted_prop, c.get_active()))
+        box.pack_start(check, False, False, 0)
+        
+        # Slider for volume
+        slider_info = item.get('slider_settings', {})
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, slider_info.get('lower', 0), slider_info.get('upper', 100), 1)
+        scale.set_value(volume)
+        scale.set_draw_value(True)
+        scale.connect("value-changed", lambda s: self.on_volume_changed(plugin, vol_prop, s.get_value()))
+        box.pack_start(scale, False, False, 0)
+        
+        return box
 
-            if m['id'] == self.selected_mid:
-                cr.set_source_rgb(0.22, 0.87, 0.76)
-                cr.set_line_width(3)
-                cr.rectangle(x-3, y-3, w+6, h+6)
-                cr.stroke()
+    def build_file_picker(self, item, plugin):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        label = Gtk.Label(label=item.get('label', 'File'))
+        label.set_halign(Gtk.Align.START)
+        box.pack_start(label, False, False, 0)
+        
+        prop_name = item.get('property')
+        current_path = plugin.settings.get(prop_name, '')
+        
+        chooser = Gtk.FileChooserButton(title="Select File", action=Gtk.FileChooserAction.OPEN)
+        if current_path:
+            chooser.set_filename(str(Path(current_path).absolute()))
+            
+        chooser.connect("file-set", lambda c: self.on_file_changed(plugin, prop_name, c.get_filename()))
+        box.pack_start(chooser, False, False, 0)
+        return box
 
-            cr.set_source_rgb(0.12, 0.12, 0.12)
-            cr.rectangle(x, y, w, h)
-            cr.fill_preserve()
-            cr.set_source_rgb(0.4, 0.4, 0.4)
-            cr.set_line_width(1)
-            cr.stroke()
+    # --- Event Dispatchers to Plugins ---
+    
+    def on_slider_changed(self, plugin, prop_name, value):
+        plugin.settings[prop_name] = int(value)
+        if prop_name == 'fps_limit':
+            plugin.engine.handle_event("SET_FPS", {"fps": int(value)})
 
-            layout = PangoCairo.create_layout(cr)
-            if m['isPrimary']:
-                cr.set_source_rgb(1, 0.8, 0)
-                layout.set_markup("<span size='large'>★</span>")
-                sw, sh = layout.get_pixel_size()
-                cr.move_to(x + (w/2) - (sw/2), y + (h/2) - (sh/2))
-                PangoCairo.show_layout(cr, layout)
+    def on_mute_toggled(self, plugin, prop_name, is_active):
+        plugin.settings[prop_name] = is_active
+        plugin.engine.handle_event("SET_MUTED", {"should_mute": is_active})
 
-            cr.set_source_rgb(0.7, 0.7, 0.7)
-            layout.set_text(f"ID: {m['id']}")
-            cr.move_to(x + 5, y + 5)
-            PangoCairo.show_layout(cr, layout)
+    def on_volume_changed(self, plugin, prop_name, value):
+        plugin.settings[prop_name] = int(value)
+        plugin.engine.handle_event("SET_VOLUME", {"volume": int(value)})
 
-    def on_map_clicked(self, widget, event):
-        mx, my, scale, ox, oy = self.get_map_metrics(widget)
-        for m in self.app.config['monitors']:
-            g = m['geometry']
-            x, y = ox + (g['x'] - mx) * scale, oy + (g['y'] - my) * scale
-            w, h = g['w'] * scale, g['h'] * scale
-            if x <= event.x <= x + w and y <= event.y <= y + h:
-                self.selected_mid = m['id']
-                self.refresh_settings_ui()
-                self.map_area.queue_draw()
-                return True
-        return True
-
-    def on_mute_toggled(self, widget):
-        self.vol_scale.set_sensitive(not widget.get_active())
-
-    def on_apply(self, btn):
-        for mon in self.app.config['monitors']:
-            if mon['id'] == self.selected_mid:
-                mon['active_preset_path'] = self.source_entry.get_text()
-                mon['is_muted'] = self.mute_check.get_active()
-                mon['volume'] = int(self.vol_adj.get_value())
-                mon['performance_mode'] = self.perf_check.get_active()
-                mon['fps_limit'] = int(self.fps_adj.get_value())
-                break
-        self.app.save_config()
-        self.app.reload_engines()
-
-    def on_browse(self, btn):
-        dialog = Gtk.FileChooserDialog(title="Select Source", parent=self, action=Gtk.FileChooserAction.OPEN)
-        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
-        if dialog.run() == Gtk.ResponseType.OK:
-            self.source_entry.set_text(dialog.get_filename())
-        dialog.destroy()
-
-    def on_edit(self, btn):
-        path = self.source_entry.get_text()
-        if os.path.exists(path):
-            subprocess.Popen(["xdg-open", path])
+    def on_file_changed(self, plugin, prop_name, file_path):
+        if file_path:
+            plugin.settings[prop_name] = file_path
