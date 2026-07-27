@@ -10,19 +10,17 @@ The included setup.sh script is optimized for Linux Mint 22.3. Running the scrip
 Linux Mint 22.2 and Older
 
 If you are running version 22.2, the automatic installer may not be able to resolve all system-level dependencies. You must manually ensure the following packages are installed via apt before running the setup script:
-Bash
-
-sudo apt update
-sudo apt install libayatana-appindicator3-dev gobject-introspection gir1.2-webkit2-4.1 libgirepository1.0-dev
 
 **General Setup**
 
-Once the system prerequisites are met, clone the repository and run the automated setup:
-Bash
+Clone the repository and run the automated setup:
+
 
 git clone https://github.com/Neppity3303/MintpaperEngine.git
+
 cd MintpaperEngine
-bash ./setup.sh
+
+./setup.sh
 
 **Creating Interactive Presets**
 
