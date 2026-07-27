@@ -16,7 +16,7 @@ If you are running version 22.2, the automatic installer may not be able to reso
 Clone the repository and run the automated setup:
 
 
-git clone https://github.com/Neppity3303/MintpaperEngine/tree/main
+git clone --single-branch --branch main https://github.com/Neppity3303/MintpaperEngine.git
 
 cd MintpaperEngine
 
