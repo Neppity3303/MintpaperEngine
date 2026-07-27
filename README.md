@@ -54,37 +54,4 @@ window.updateStats = (stats) => {
     // stats.disk (Percentage)
 };
 
-**Performance Tuning**
 
-Users can set a frame rate limit via the Control Panel. To respect this limit in your code, use the following hook:
-JavaScript
-
-window.setFPS = (limit) => {
-    // Logic to update your animation timing or requestAnimationFrame loop
-};
-
-**Key Features**
-
-    Instance Locking: Uses Linux Abstract Sockets (\0) to prevent multiple engine instances from running simultaneously.
-
-    Non-Persistent UI: The Control Panel is designed to be hidden, not destroyed, allowing it to maintain state and reappear instantly from the tray.
-
-    Auto-Pathing: The setup.sh script generates absolute paths for the launcher, ensuring the engine can be moved between directories without breaking the Mint Menu shortcut.
-
-**Project Structure**
-
-    engine/: Core logic for window management, audio, and display syncing.
-
-    ui/: Gtk code for the Control Panel and system tray indicator.
-
-    presets/: Directory for HTML and Video wallpaper assets.
-
-    launch.sh: The primary entry point that activates the virtual environment and starts the engine.
-
-**Bugs**
-
-The icon issue should be resolved. If errors continue notify me.
-
-Mintpaper Engine mutes spotify and possibly some other applications. You can fix this by opening the sound app, going to the applications tab and unmuting it
-
-Performance mode doesn't work right now. It might take a while to get it up and running.
