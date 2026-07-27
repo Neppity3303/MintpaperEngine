@@ -105,36 +105,57 @@ class WebviewPlugin(MintpaperPlugin):
             self._on_mouse_move(data)
         elif event_type == "MOUSE_CLICK":
             self._on_mouse_click(data)
+        elif event_type == "SYS_STATS":
+            self._update_system_stats(data)
 
     # --- Internal Event Handlers ---
 
     def _set_paused(self, should_pause):
-        # 1. Native WebKit Rendering Pause
+        # 1. Native WebKit Rendering Pause (if supported)
+
+        self.is_paused = should_pause
+
         if hasattr(self.webview, 'set_is_paused'):
             self.webview.set_is_paused(should_pause)
 
-        # 2. The Coma Script: Aggressive JS Hijack
+        # 2. The Coma Script: Hijack with Callback Recovery
         val = "true" if should_pause else "false"
         script = f"""
         (function() {{
+            // Wrap requestAnimationFrame on first run to capture callbacks while paused
             if (window._mp_controlled === undefined) {{
                 window._mp_raf = window.requestAnimationFrame;
+                window._mp_is_paused = false;
+                window._mp_pending_callbacks = new Set();
                 window._mp_controlled = true;
+
+                window.requestAnimationFrame = function(callback) {{
+                    if (window._mp_is_paused) {{
+                        window._mp_pending_callbacks.add(callback);
+                        return 0;
+                    }}
+                    return window._mp_raf(callback);
+                }};
             }}
 
+            window._mp_is_paused = {val};
+
             if ({val}) {{
-                // PAUSE: Kill the animation loop
-                window.requestAnimationFrame = function() {{ return 0; }};
+                // PAUSE: Pause CSS animations and media elements
                 document.body.style.animationPlayState = 'paused';
                 document.querySelectorAll('video, audio').forEach(m => m.pause());
             }} else {{
-                // RESUME: Restore the loop
-                window.requestAnimationFrame = window._mp_raf;
+                // RESUME: Resume CSS animations and media elements
                 document.body.style.animationPlayState = 'running';
                 document.querySelectorAll('video, audio').forEach(m => m.play());
+
+                // Restart any animation loops captured during the pause state
+                const pending = Array.from(window._mp_pending_callbacks);
+                window._mp_pending_callbacks.clear();
+                pending.forEach(cb => window._mp_raf(cb));
             }}
             
-            // Dispatch standard event for custom wallpaper logic
+            // Dispatch standard event for custom wallpaper hooks
             window.dispatchEvent(new CustomEvent('wallpaperPause', {{ detail: {val} }}));
         }})();
         """
@@ -148,12 +169,28 @@ class WebviewPlugin(MintpaperPlugin):
         GLib.idle_add(self.webview.run_javascript, script, None, None, None)
 
     def _on_mouse_move(self, data):
+
+        if getattr(self, 'is_paused', False):
+            return
+
         local_x = data.get('local_x', 0)
         local_y = data.get('local_y', 0)
         script = f"if(window.updateMouse) {{ window.updateMouse({local_x}, {local_y}); }}"
         GLib.idle_add(self.webview.run_javascript, script, None, None, None)
 
     def _on_mouse_click(self, data):
+
+        if getattr(self, 'is_paused', False):
+            return
+
         val = "true" if data.get('clicked') else "false"
         script = f"if(window.updateClick) {{ window.updateClick({val}); }}"
+        GLib.idle_add(self.webview.run_javascript, script, None, None, None)
+
+    def _update_system_stats(self, data):
+        if getattr(self,'is_paused', False):
+            return
+
+        payload = json.dumps(data)
+        script = f"if(window.updateStats) {{ window.updateStats({payload}); }}"
         GLib.idle_add(self.webview.run_javascript, script, None, None, None)

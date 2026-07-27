@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# 1. Define Paths
+# 1. Dynamically resolve the absolute installation path (prevents 'pwd' breaking if run from elsewhere)
+DIR_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="MintpaperEngine"
-DIR_PATH="$(pwd)"
 DESKTOP_FILE="$HOME/.local/share/applications/mintpaper.desktop"
 AUTOSTART_FILE="$HOME/.config/autostart/mintpaper.desktop"
 
@@ -12,7 +12,7 @@ rm -f "$AUTOSTART_FILE"
 rm -f "$DIR_PATH/startup_error.log"
 
 echo "Step 2: Installing system dependencies..."
-# Added gir1.2-ayatanaappindicator3-0.1 for the system tray
+# Added wmctrl and x11-utils because the Coma Tracker requires them for AABB occlusion math
 sudo apt update && sudo apt install -y \
     python3-gi \
     gir1.2-gtk-3.0 \
@@ -20,22 +20,35 @@ sudo apt update && sudo apt install -y \
     gir1.2-ayatanaappindicator3-0.1 \
     mpv \
     libmpv-dev \
-    python3-venv
+    python3-venv \
+    wmctrl \
+    x11-utils
 
 echo "Step 3: Setting up Virtual Environment (with System Bridge)..."
+cd "$DIR_PATH" || exit
 rm -rf venv
 python3 -m venv --system-site-packages venv
 source venv/bin/activate
 pip install psutil pynput python-mpv
 
-echo "Step 4: Creating the launch wrapper..."
-# We added XDG_CURRENT_DESKTOP to ensure the tray icon renders correctly on Mint
-cat <<EOF > "$DIR_PATH/launch.sh"
+echo "Step 4: Creating the robust launch wrapper..."
+# Replaced the old generation block with our dynamic, terminal-friendly launch script
+# Note the quotes around 'EOF', which stops bash from evaluating variables during creation
+cat << 'EOF' > "$DIR_PATH/launch.sh"
 #!/bin/bash
-export DISPLAY=:0
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DIR" || { echo "Mintpaper: Failed to resolve directory"; exit 1; }
+
+if [ -z "$DISPLAY" ]; then
+    export DISPLAY=:0
+fi
 export XDG_CURRENT_DESKTOP=Cinnamon
-cd "$DIR_PATH"
-"./venv/bin/python3" "main.py" >> "$DIR_PATH/startup_error.log" 2>&1
+
+LOG_FILE="$DIR/startup_error.log"
+echo "Mintpaper: Starting Engine (v0.20 Architecture)..."
+
+# Write to log and terminal simultaneously for easy debugging
+"$DIR/venv/bin/python3" "$DIR/main.py" 2>&1 | tee "$LOG_FILE"
 EOF
 
 chmod +x "$DIR_PATH/launch.sh"
@@ -61,10 +74,11 @@ Categories=Utility;Settings;
 X-GNOME-Autostart-enabled=true"
 
 # Write to Applications Menu
+mkdir -p "$HOME/.local/share/applications"
 echo "$DESKTOP_ENTRY" > "$DESKTOP_FILE"
 chmod +x "$DESKTOP_FILE"
 
-# Write to Autostart
+# Write to Autostart (Can be manually removed if you only want terminal access for now)
 mkdir -p "$HOME/.config/autostart"
 echo "$DESKTOP_ENTRY" > "$AUTOSTART_FILE"
 
@@ -73,6 +87,5 @@ update-desktop-database ~/.local/share/applications/
 echo "------------------------------------------------"
 echo "INSTALLATION COMPLETE"
 echo "Directory: $DIR_PATH"
-echo "The engine will now start automatically at login."
-echo "You can also launch it from your Start Menu."
+echo "The engine is now configured for your Linux Mint environment."
 echo "------------------------------------------------"

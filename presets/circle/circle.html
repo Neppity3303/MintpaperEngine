@@ -101,7 +101,7 @@
         let lastX = 0;
         let lastY = 0;
 
-        // Mouse Bridge (Called by pynput in main.py)
+        // Mouse Bridge
         window.updateMouse = (x, y) => {
             lastX = x; 
             lastY = y;
@@ -120,7 +120,7 @@
             }
         };
 
-        // Click Bridge (Called by pynput in main.py)
+        // Click Bridge
         window.updateClick = (isDown) => {
             if (isDown) {
                 follower.classList.add('active');
@@ -150,20 +150,24 @@
             }
         }
 
+        // Volume Bridge (Fixed scaling for HTML5 Audio)
         window.updateVolume = function(value){
             console.log("Setting volume to ", value);
             
+            // Convert 0-100 scale from Python to 0.0-1.0 scale for HTML5
+            const scaledVolume = Math.max(0, Math.min(100, value)) / 100;
+            
             const audio = document.querySelector('audio');
             if (audio) {
-                audio.volume = value;
+                audio.volume = scaledVolume;
             }
             const video = document.querySelector('video');
             if (video) {
-                video.volume = value;
+                video.volume = scaledVolume;
             }
 
             if (window.myAudioObject) {
-                window.myAudioObject.volume = value;
+                window.myAudioObject.volume = scaledVolume;
             }
         }
 
